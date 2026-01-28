@@ -1,0 +1,41 @@
+node_modules
+.vercel
+.turbo
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env files
+.env
+.env.*
+!.env.example
+.env.local
+
+# TypeScript build output
+dist
+build
+out
+
+# Vercel / Next / serverless related
+.next
+.vercel/output
+.vercel/project.json
+.serverless
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# Coverage / tests
+coverage
+.nyc_output
+

@@ -1,0 +1,19 @@
+{
+  "name": "worker-reports-bot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "tsc -p tsconfig.json",
+    "set-webhook": "node scripts/setWebhook.mjs"
+  },
+  "dependencies": {
+    "googleapis": "^156.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "typescript": "^5.7.3",
+    "vercel": "^39.4.2"
+  }
+}
+
