@@ -1,7 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { VercelRequest, VercelResponse } from "@vercel/node";
-import { collectReports } from "../lib/googleDrive";
+import {
+  collectReports,
+  collectReportsData,
+  type UnifiedReportHeaders,
+  type UnifiedReportRow,
+} from "../lib/googleDrive";
 import { isUpdateProcessed, markUpdateProcessed } from "../lib/dedup";
 import { tgSendMessage } from "../lib/telegram";
 import { getEnv, mustGetEnv } from "../lib/env";
@@ -70,6 +75,39 @@ function escapeTableCell(text: string): string {
     .replace(/`/g, "\\`");
 }
 
+const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
+const MAX_REPORT_DATA_ROWS = 50;
+
+function formatUnifiedReportsTable(
+  headers: UnifiedReportHeaders,
+  rows: UnifiedReportRow[],
+): { text: string; truncated: number } {
+  const cols = ["Дата", "Источник", ...headers];
+  const headerRow =
+    "| " + cols.map((c) => "*" + escapeTableCell(c) + "*").join(" | ") + " |";
+  const sep = "|" + cols.map(() => "--------").join("|") + "|";
+  const lines: string[] = [headerRow, sep];
+  const maxRows = Math.min(rows.length, MAX_REPORT_DATA_ROWS);
+  for (let i = 0; i < maxRows; i++) {
+    const r = rows[i];
+    const cells = [r.date, r.source, ...r.cells];
+    const padded = headers.length - r.cells.length;
+    for (let j = 0; j < padded; j++) cells.push("—");
+    const rowLine =
+      "| " +
+      cells.slice(0, cols.length).map(escapeTableCell).join(" | ") +
+      " |";
+    if (
+      lines.join("\n").length + rowLine.length + 100 >
+      TELEGRAM_MAX_MESSAGE_LENGTH
+    )
+      break;
+    lines.push(rowLine);
+  }
+  const truncated = rows.length - (lines.length - 2);
+  return { text: lines.join("\n"), truncated };
+}
+
 function formatReportsAsMarkdownTable(
   reports: {
     name: string;
@@ -87,10 +125,10 @@ function formatReportsAsMarkdownTable(
       (r) =>
         `| ${escapeTableCell(r.name)} | ${escapeTableCell(formatDate(r.lastUpdated))} | ${escapeTableCell(r.author || "—")} | ${escapeTableCell(r.url)} |`,
     );
-  const table = [header, separator, ...rows].join("\\n");
+  const table = [header, separator, ...rows].join("\n");
   const tail =
     reports.length > maxRows
-      ? `\\n\\n_...и еще ${reports.length - maxRows} отчетов_`
+      ? `\n\n_...и еще ${reports.length - maxRows} отчетов_`
       : "";
   return table + tail;
 }
@@ -165,13 +203,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         case "/start": {
           await tgSendMessage(
             chatId,
-            `🎉 *Привет, ${escapeMarkdown(userName)}!*\\n\\n` +
-              `Я бот для сбора отчетов из Google Таблиц.\\n\\n` +
-              `*Доступные команды:*\\n` +
-              `📊 /reports - Отчеты за неделю\\n` +
-              `📅 /today - Отчеты за сегодня\\n` +
-              `🆘 /help - Справка\\n` +
-              `🏓 /ping - Проверка связи\\n\\n` +
+            `🎉 *Привет, ${escapeMarkdown(userName)}!*\n\n` +
+              `Я бот для сбора отчетов из Google Таблиц.\n\n` +
+              `*Доступные команды:*\n` +
+              `📊 /reports - Отчеты за неделю\n` +
+              `📅 /today - Отчеты за сегодня\n` +
+              `🆘 /help - Справка\n` +
+              `🏓 /ping - Проверка связи\n\n` +
               `Для работы с отчетами нужны права администратора.`,
           );
           break;
@@ -179,11 +217,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         case "/help": {
           await tgSendMessage(
             chatId,
-            `📚 *Справка по командам*\\n\\n` +
-              `/start - Начать работу\\n` +
-              `/reports - Отчеты за неделю (админы)\\n` +
-              `/today - Отчеты за сегодня (админы)\\n` +
-              `/ping - Проверка\\n` +
+            `📚 *Справка по командам*\n\n` +
+              `/start - Начать работу\n` +
+              `/reports - Отчеты за неделю (админы)\n` +
+              `/today - Отчеты за сегодня (админы)\n` +
+              `/ping - Проверка\n` +
               `/help - Справка`,
           );
           break;
@@ -191,9 +229,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         case "/ping": {
           await tgSendMessage(
             chatId,
-            `🏓 *Pong!*\\n\\n✅ Бот работает исправно\\n🕐 Время сервера: ${new Date().toLocaleString(
+            `🏓 *Pong!*\n\n✅ Бот работает исправно\n🕐 Время сервера: ${new Date().toLocaleString(
               "ru-RU",
-            )}\\n📡 Статус: Online`,
+            )}\n📡 Статус: Online`,
           );
           break;
         }
@@ -250,15 +288,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           // #endregion
           appendLog({
             location: "api/telegram.ts:beforeCollect",
-            message: "calling collectReports",
+            message: "calling collectReportsData",
             data: { days: reportsDays },
             hypothesisId: "sync",
           });
-          const reports = await collectReports(reportsDays);
+          const { headers: dataHeaders, rows: dataRows } =
+            await collectReportsData(reportsDays);
           appendLog({
             location: "api/telegram.ts:afterCollect",
-            message: "collectReports returned",
-            data: { reportsLength: reports.length },
+            message: "collectReportsData returned",
+            data: { rowsLength: dataRows.length },
             hypothesisId: "sync",
           });
           // #region agent log
@@ -267,19 +306,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               location: "api/telegram.ts:/reports:afterCollect",
-              message: "collectReports(7) returned",
-              data: { reportsLength: reports.length },
+              message: "collectReportsData returned",
+              data: { rowsLength: dataRows.length },
               timestamp: Date.now(),
               sessionId: "debug-session",
               hypothesisId: "H-result",
             }),
           }).catch(() => {});
           // #endregion
-          if (reports.length === 0) {
+          if (dataRows.length === 0) {
             appendLog({
               location: "api/telegram.ts:reportsEmpty",
               message: "sending not found",
-              data: { reportsLength: 0 },
+              data: { rowsLength: 0 },
               hypothesisId: "sync",
             });
             // #region agent log
@@ -288,8 +327,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 location: "api/telegram.ts:/reports:empty",
-                message: "reports.length === 0, sending not found",
-                data: { reportsLength: 0 },
+                message: "dataRows.length === 0, sending not found",
+                data: { rowsLength: 0 },
                 timestamp: Date.now(),
                 sessionId: "debug-session",
                 hypothesisId: "H-empty",
@@ -303,10 +342,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             break;
           }
 
-          const msg =
-            `📊 *Найдено отчетов: ${reports.length}*\\n\\n` +
-            formatReportsAsMarkdownTable(reports, 15);
-
+          const { text: tableText, truncated } = formatUnifiedReportsTable(
+            dataHeaders,
+            dataRows,
+          );
+          let msg =
+            `📊 *Записей за последние ${reportsDays} дн.: ${dataRows.length}*\n\n` +
+            tableText;
+          if (truncated > 0) {
+            msg += `\n\n_...показаны последние ${dataRows.length - truncated} записей_`;
+          }
           await tgSendMessage(chatId, msg);
           break;
         }
@@ -327,7 +372,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
 
           const msg =
-            `📅 *Отчеты за сегодня*\\nНайдено: ${reports.length} отчетов\\n\\n` +
+            `📅 *Отчеты за сегодня*\nНайдено: ${reports.length} отчетов\n\n` +
             formatReportsAsMarkdownTable(reports, 50);
 
           await tgSendMessage(chatId, msg);
@@ -370,10 +415,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const adminChatId = (getEnv("ADMIN_IDS") || "").split(",")[0]?.trim();
       if (adminChatId) {
         const friendlyMsg = isDriveApiDisabled
-          ? `❌ *Google Drive API отключен*\\n\\n` +
-            `Включите API в проекте и подождите 1–2 минуты:\\n${escapeMarkdown(driveApiUrl)}`
-          : `❌ *Ошибка*\\n` +
-            `Update: \`${String(updateId)}\`\\n` +
+          ? `❌ *Google Drive API отключен*\n\n` +
+            `Включите API в проекте и подождите 1–2 минуты:\n${escapeMarkdown(driveApiUrl)}`
+          : `❌ *Ошибка*\n` +
+            `Update: \`${String(updateId)}\`\n` +
             `Msg: \`${escapeMarkdown(errMsg.slice(0, 300))}\``;
         await tgSendMessage(adminChatId, friendlyMsg);
       }

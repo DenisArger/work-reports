@@ -26,24 +26,130 @@ function debugLog(payload: Record<string, unknown>) {
 }
 
 export type DriveReport = {
+  id: string;
   name: string;
   url: string;
   lastUpdated: string;
   author?: string;
 };
 
-function getDriveClient() {
-  // Service account JSON (целиком) кладём в env как строку.
-  // В Vercel это удобно хранить в переменной окружения.
+const SCOPES = [
+  "https://www.googleapis.com/auth/drive.readonly",
+  "https://www.googleapis.com/auth/spreadsheets.readonly",
+];
+
+function getAuth() {
   const credsRaw = mustGetEnv("GOOGLE_SERVICE_ACCOUNT_JSON");
   const creds = JSON.parse(credsRaw);
-
-  const auth = new google.auth.GoogleAuth({
+  return new google.auth.GoogleAuth({
     credentials: creds,
-    scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+    scopes: SCOPES,
   });
+}
 
-  return google.drive({ version: "v3", auth });
+function getDriveClient() {
+  return google.drive({ version: "v3", auth: getAuth() });
+}
+
+function getSheetsClient() {
+  return google.sheets({ version: "v4", auth: getAuth() });
+}
+
+/** Читает первый лист таблицы: первая строка — заголовки, остальные — данные. */
+async function getSheetValues(
+  spreadsheetId: string,
+): Promise<{ headers: string[]; rows: string[][] }> {
+  const sheets = getSheetsClient();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: "A1:ZZ1000",
+  });
+  const raw = (res.data.values || []) as string[][];
+  if (raw.length === 0) return { headers: [], rows: [] };
+  const headers = raw[0].map((c) => String(c ?? "").trim());
+  const rows = raw
+    .slice(1)
+    .map((row) => headers.map((_, i) => String(row[i] ?? "").trim()));
+  return { headers, rows };
+}
+
+const TIMESTAMP_HEADER = "Отметка времени";
+
+function parseTimestamp(value: string): Date | null {
+  if (!value || !value.trim()) return null;
+  const s = value.trim();
+  const iso = Date.parse(s);
+  if (!Number.isNaN(iso)) return new Date(iso);
+  const ru = s.match(
+    /^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/,
+  );
+  if (ru) {
+    const [, d, m, y, h, min, sec] = ru;
+    const date = new Date(
+      parseInt(y!, 10),
+      parseInt(m!, 10) - 1,
+      parseInt(d!, 10),
+      parseInt(h!, 10),
+      parseInt(min!, 10),
+      parseInt(sec || "0", 10),
+    );
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  return null;
+}
+
+export type UnifiedReportRow = {
+  date: string;
+  source: string;
+  cells: string[];
+};
+
+export type UnifiedReportHeaders = string[];
+
+/** Собирает данные из листов «(Ответы)», фильтрует по колонке «Отметка времени» за последние days дней. */
+export async function collectReportsData(
+  days: number,
+): Promise<{ headers: UnifiedReportHeaders; rows: UnifiedReportRow[] }> {
+  const reports = await collectReports(days);
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  since.setHours(0, 0, 0, 0);
+
+  const allHeaders: UnifiedReportHeaders = [];
+  const allRows: UnifiedReportRow[] = [];
+
+  for (const r of reports) {
+    let sheet: { headers: string[]; rows: string[][] };
+    try {
+      sheet = await getSheetValues(r.id);
+    } catch {
+      continue;
+    }
+    if (sheet.headers.length === 0 || sheet.rows.length === 0) continue;
+
+    const tsIndex = sheet.headers.findIndex(
+      (h) => h === TIMESTAMP_HEADER || h.trim() === TIMESTAMP_HEADER,
+    );
+    if (tsIndex < 0) continue;
+
+    const otherHeaders = sheet.headers.filter((_, i) => i !== tsIndex);
+    if (allHeaders.length === 0) allHeaders.push(...otherHeaders);
+
+    for (const row of sheet.rows) {
+      const tsVal = row[tsIndex];
+      const date = parseTimestamp(tsVal);
+      if (!date || date < since) continue;
+      const dateStr = date.toISOString().slice(0, 16).replace("T", " ");
+      const cells = row.filter((_, i) => i !== tsIndex);
+      allRows.push({
+        date: dateStr,
+        source: r.name,
+        cells,
+      });
+    }
+  }
+
+  return { headers: allHeaders, rows: allRows };
 }
 
 /** Собирает ID папки и всех подпапок рекурсивно (поиск отчётов во вложенных папках). */
@@ -155,6 +261,7 @@ export async function collectReports(days: number): Promise<DriveReport[]> {
         }
         seenIds.add(f.id);
         out.push({
+          id: f.id,
           name: f.name,
           url: f.webViewLink,
           lastUpdated: f.modifiedTime,

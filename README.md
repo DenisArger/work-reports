@@ -109,12 +109,13 @@ yarn webhook:delete
 | `yarn webhook:delete` | Удалить webhook                        |
 | `yarn webhook:info`   | Показать информацию о текущем webhook  |
 
-### Google Drive доступ
+### Google Drive и Sheets доступ
 
 1. Создайте service account в [Google Cloud Console](https://console.cloud.google.com/)
-2. **Включите Google Drive API** в этом же проекте:  
-   [Google Drive API → включить](https://console.developers.google.com/apis/api/drive.googleapis.com/overview)  
-   (выберите нужный проект, нажмите «Включить»; после включения подождите 1–2 минуты)
+2. Включите в этом же проекте:
+   - **Google Drive API**: [включить](https://console.developers.google.com/apis/api/drive.googleapis.com/overview) — список таблиц «(Ответы)» в папке
+   - **Google Sheets API**: [включить](https://console.developers.google.com/apis/api/sheets.googleapis.com/overview) — чтение содержимого листов для команды `/reports`
+     (выберите нужный проект, нажмите «Включить»; после включения подождите 1–2 минуты)
 3. Скачайте ключ JSON и положите содержимое в `GOOGLE_SERVICE_ACCOUNT_JSON`
 4. Дайте сервисному аккаунту доступ **к папке** `FOLDER_ID` (Share → email service account)
 
