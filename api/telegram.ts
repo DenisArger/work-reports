@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { VercelRequest, VercelResponse } from "@vercel/node";
+import { callAppsScriptForReport } from "../lib/appsScript";
 import {
   collectReports,
   createSummaryReportDocument,
@@ -237,7 +238,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             chatId,
             `⏳ Собираю отчеты за последние ${reportsDays} дн. и создаю сводный файл…`,
           );
-          const result = await createSummaryReportDocument(reportsDays);
+          const appsScriptUrl = getEnv("GOOGLE_APPS_SCRIPT_WEB_APP_URL");
+          const result = appsScriptUrl?.trim()
+            ? await callAppsScriptForReport()
+            : await createSummaryReportDocument(reportsDays);
           if (!result) {
             await tgSendMessage(
               chatId,
