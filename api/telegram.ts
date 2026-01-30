@@ -32,8 +32,23 @@ function formatDate(iso: string): string {
   }).format(d);
 }
 
+const DEBUG_INGEST =
+  "http://127.0.0.1:7243/ingest/9acac06f-fa87-45a6-af60-73458650b939";
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // #region agent log
+  fetch(DEBUG_INGEST, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      location: "api/telegram.ts:handler",
+      message: "telegram handler invoked",
+      data: { method: req.method, url: req.url, hasBody: !!req.body },
+      timestamp: Date.now(),
+      sessionId: "debug-session",
+      hypothesisId: "H4",
+    }),
+  }).catch(() => {});
   console.log("[DEBUG] Handler entry, method:", req.method);
   // #endregion
 
