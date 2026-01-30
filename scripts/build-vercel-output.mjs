@@ -4,7 +4,7 @@
  * so Vercel reliably routes /api/telegram and /api/health.
  */
 import { build } from "esbuild";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, rm } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,6 +13,7 @@ const root = join(__dirname, "..");
 const out = join(root, ".vercel", "output");
 
 async function run() {
+  await rm(out, { recursive: true, force: true });
   await mkdir(join(out, "functions", "api"), { recursive: true });
   await mkdir(join(out, "static"), { recursive: true });
 
