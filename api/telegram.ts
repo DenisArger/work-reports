@@ -302,6 +302,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const errMsg = String(err?.message || err);
     const isDriveApiDisabled =
       /Google Drive API.*(has not been used|disabled)/i.test(errMsg);
+    const isInsufficientPermissions =
+      /Insufficient permissions for the specified parent/i.test(errMsg);
+    const isDriveQuotaExceeded =
+      /Drive storage quota|storage quota.*exceeded|quota has been exceeded/i.test(
+        errMsg,
+      );
     const projectMatch = errMsg.match(/project[=\s](\d+)/i);
     const driveApiUrl = projectMatch
       ? `https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=${projectMatch[1]}`
@@ -310,12 +316,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const adminChatId = (getEnv("ADMIN_IDS") || "").split(",")[0]?.trim();
       if (adminChatId) {
-        const friendlyMsg = isDriveApiDisabled
-          ? `❌ *Google Drive API отключен*\n\n` +
-            `Включите API в проекте и подождите 1–2 минуты:\n${escapeMarkdown(driveApiUrl)}`
-          : `❌ *Ошибка*\n` +
+        let friendlyMsg: string;
+        if (isDriveApiDisabled) {
+          friendlyMsg =
+            `❌ *Google Drive API отключен*\n\n` +
+            `Включите API в проекте и подождите 1–2 минуты:\n${escapeMarkdown(driveApiUrl)}`;
+        } else if (isInsufficientPermissions) {
+          friendlyMsg =
+            `❌ *Недостаточно прав к папке на Drive*\n\n` +
+            `Для команды /reports бот создаёт файл в папке \`FOLDER_ID\`. Откройте эту папку в Google Drive → «Настройки доступа» → пригласите по email ваш *сервисный аккаунт* (из JSON ключа, поле \`client_email\`) с правом *Редактор* (не «Читатель»).`;
+        } else if (isDriveQuotaExceeded) {
+          friendlyMsg =
+            `❌ *На Google Диске закончилось место*\n\n` +
+            `Папка \`FOLDER_ID\` привязана к аккаунту, у которого исчерпана квота. Освободите место: удалите ненужные файлы, очистите корзину на [drive.google.com](https://drive.google.com) или смените папку на аккаунт с доступным местом.`;
+        } else {
+          friendlyMsg =
+            `❌ *Ошибка*\n` +
             `Update: \`${String(updateId)}\`\n` +
             `Msg: \`${escapeMarkdown(errMsg.slice(0, 300))}\``;
+        }
         await tgSendMessage(adminChatId, friendlyMsg);
       }
     } catch {
