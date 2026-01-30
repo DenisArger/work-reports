@@ -27,7 +27,7 @@ yarn dev
 **Опционально:**
 
 - `REPORT_NAME_SUBSTRING` — подстрока в названии файла для отбора отчётов (по умолчанию `(Ответы)`). Если ваши таблицы называются иначе, задайте эту переменную.
-- `REPORTS_DAYS` — число дней в тексте команды `/reports` (по умолчанию `7`). В запросе к Drive **фильтр по дате не используется**: при добавлении строк (колонка «Отметка времени») метаданные файла в Drive могут не обновляться, поэтому показываются все таблицы «(Ответы)» из папки.
+- `REPORTS_DAYS` — число дней для команды `/reports` (по умолчанию `7`). По команде `/reports` бот создаёт сводный Google Doc с таблицей отчётов за указанный период, сохраняет его в подпапку «Отчеты» на Drive и отправляет в чат ссылку на файл.
 
 **Для локальной отладки:**
 
@@ -113,11 +113,12 @@ yarn webhook:delete
 
 1. Создайте service account в [Google Cloud Console](https://console.cloud.google.com/)
 2. Включите в этом же проекте:
-   - **Google Drive API**: [включить](https://console.developers.google.com/apis/api/drive.googleapis.com/overview) — список таблиц «(Ответы)» в папке
-   - **Google Sheets API**: [включить](https://console.developers.google.com/apis/api/sheets.googleapis.com/overview) — чтение содержимого листов для команды `/reports`
+   - **Google Drive API**: [включить](https://console.developers.google.com/apis/api/drive.googleapis.com/overview) — список таблиц «(Ответы)» в папке и создание сводного документа для `/reports`
+   - **Google Sheets API**: [включить](https://console.developers.google.com/apis/api/sheets.googleapis.com/overview) — чтение содержимого листов
+   - **Google Docs API**: [включить](https://console.developers.google.com/apis/api/docs.googleapis.com/overview) — создание сводного отчёта (Google Doc) по команде `/reports`
      (выберите нужный проект, нажмите «Включить»; после включения подождите 1–2 минуты)
 3. Скачайте ключ JSON и положите содержимое в `GOOGLE_SERVICE_ACCOUNT_JSON`
-4. Дайте сервисному аккаунту доступ **к папке** `FOLDER_ID` (Share → email service account)
+4. Дайте сервисному аккаунту доступ **к папке** `FOLDER_ID`: Share → пригласить по email сервисного аккаунта с правом **Редактор** (нужно для создания подпапки «Отчеты» и файла сводного отчёта по `/reports`)
 
 ### Деплой на Vercel
 

@@ -35,7 +35,9 @@ export type DriveReport = {
 
 const SCOPES = [
   "https://www.googleapis.com/auth/drive.readonly",
+  "https://www.googleapis.com/auth/drive",
   "https://www.googleapis.com/auth/spreadsheets.readonly",
+  "https://www.googleapis.com/auth/documents",
 ];
 
 function getAuth() {
@@ -53,6 +55,10 @@ function getDriveClient() {
 
 function getSheetsClient() {
   return google.sheets({ version: "v4", auth: getAuth() });
+}
+
+function getDocsClient() {
+  return google.docs({ version: "v1", auth: getAuth() });
 }
 
 /** Читает первый лист таблицы: первая строка — заголовки, остальные — данные. */
@@ -302,4 +308,177 @@ export async function collectReports(days: number): Promise<DriveReport[]> {
   });
   // #endregion
   return out;
+}
+
+const SUMMARY_HEADERS = [
+  "Имя",
+  "Что сделано",
+  "Нужна ли помощь",
+  "Планы на неделю",
+];
+
+/** Находит индексы колонок по подстрокам (как в code.js). */
+function findSummaryColumnIndices(headers: UnifiedReportHeaders): {
+  done: number;
+  help: number;
+  plan: number;
+} {
+  const lower = (s: string) => s.toLowerCase();
+  const done = headers.findIndex((h) => lower(h).includes("что было сделано"));
+  const help = headers.findIndex(
+    (h) => lower(h).includes("нужна ли") && lower(h).includes("помощь"),
+  );
+  const plan = headers.findIndex((h) => lower(h).includes("какие планы"));
+  return {
+    done: done >= 0 ? done : 0,
+    help: help >= 0 ? help : 1,
+    plan: plan >= 0 ? plan : 2,
+  };
+}
+
+/** Создаёт сводный Google Doc с таблицей отчётов и возвращает ссылку. */
+export async function createSummaryReportDocument(
+  days: number,
+): Promise<{ url: string } | null> {
+  const { headers, rows } = await collectReportsData(days);
+  if (rows.length === 0) return null;
+
+  const {
+    done: doneIdx,
+    help: helpIdx,
+    plan: planIdx,
+  } = findSummaryColumnIndices(headers);
+
+  const tableRows: string[][] = [
+    SUMMARY_HEADERS,
+    ...rows.map((r) => [
+      r.source,
+      r.cells[doneIdx] ?? "",
+      r.cells[helpIdx] ?? "",
+      r.cells[planIdx] ?? "",
+    ]),
+  ];
+
+  const folderId = mustGetEnv("FOLDER_ID");
+  const drive = getDriveClient();
+  const docs = getDocsClient();
+
+  let reportsFolderId: string;
+  const listRes = await drive.files.list({
+    q: `'${folderId}' in parents and name='Отчеты' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields: "files(id)",
+    supportsAllDrives: true,
+  });
+  const existing = (listRes.data.files as { id?: string }[])?.[0];
+  if (existing?.id) {
+    reportsFolderId = existing.id;
+  } else {
+    const createRes = await drive.files.create({
+      requestBody: {
+        name: "Отчеты",
+        mimeType: "application/vnd.google-apps.folder",
+        parents: [folderId],
+      },
+      fields: "id",
+    });
+    reportsFolderId = (createRes.data as { id: string }).id;
+  }
+
+  const today = new Date();
+  const dateStr = today.toISOString().slice(0, 10);
+  const docName = `Сводный отчет ${dateStr}`;
+
+  const createFileRes = await drive.files.create({
+    requestBody: {
+      name: docName,
+      mimeType: "application/vnd.google-apps.document",
+      parents: [reportsFolderId],
+    },
+    fields: "id",
+  });
+  const docId = (createFileRes.data as { id: string }).id;
+
+  const numRows = tableRows.length;
+  const numCols = 4;
+  await docs.documents.batchUpdate({
+    documentId: docId,
+    requestBody: {
+      requests: [
+        {
+          insertTable: {
+            rows: numRows,
+            columns: numCols,
+            endOfSegmentLocation: {},
+          },
+        },
+      ],
+    },
+  });
+
+  const docRes = await docs.documents.get({
+    documentId: docId,
+  });
+  const doc = docRes.data;
+  const body = (doc as any).body;
+  const content = body?.content ?? [];
+  const tableEl = content.find((el: any) => el.table);
+  if (!tableEl?.table?.tableRows) {
+    throw new Error("Не удалось получить структуру таблицы документа");
+  }
+
+  const indices: number[] = [];
+  for (const row of tableEl.table.tableRows) {
+    const cells = row.tableCells ?? [];
+    for (const cell of cells) {
+      const firstContent = (cell.content ?? [])[0];
+      const start = (firstContent as any)?.startIndex;
+      if (typeof start === "number") indices.push(start);
+    }
+  }
+
+  const flatCells = tableRows.flat();
+  const insertRequests: {
+    insertText: { location: { index: number }; text: string };
+  }[] = [];
+  for (let i = 0; i < Math.min(indices.length, flatCells.length); i++) {
+    insertRequests.push({
+      insertText: {
+        location: { index: indices[i] },
+        text: flatCells[i] + "\n",
+      },
+    });
+  }
+  insertRequests.sort(
+    (a, b) =>
+      (b.insertText.location.index as number) -
+      (a.insertText.location.index as number),
+  );
+
+  if (insertRequests.length > 0) {
+    await docs.documents.batchUpdate({
+      documentId: docId,
+      requestBody: {
+        requests: insertRequests.map((r) => ({ insertText: r.insertText })),
+      },
+    });
+  }
+
+  try {
+    await drive.permissions.create({
+      fileId: docId,
+      requestBody: { type: "anyone", role: "reader" },
+      supportsAllDrives: true,
+    });
+  } catch {
+    // Игнорируем: файл может быть уже доступен по ссылке
+  }
+
+  const fileRes = await drive.files.get({
+    fileId: docId,
+    fields: "webViewLink",
+    supportsAllDrives: true,
+  });
+  const url = (fileRes.data as { webViewLink?: string }).webViewLink;
+  if (!url) throw new Error("Не удалось получить ссылку на документ");
+  return { url };
 }

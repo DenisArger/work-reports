@@ -3,9 +3,7 @@ import path from "node:path";
 import { VercelRequest, VercelResponse } from "@vercel/node";
 import {
   collectReports,
-  collectReportsData,
-  type UnifiedReportHeaders,
-  type UnifiedReportRow,
+  createSummaryReportDocument,
 } from "../lib/googleDrive";
 import { isUpdateProcessed, markUpdateProcessed } from "../lib/dedup";
 import { tgSendMessage } from "../lib/telegram";
@@ -73,39 +71,6 @@ function escapeTableCell(text: string): string {
     .replace(/\*/g, "\\*")
     .replace(/_/g, "\\_")
     .replace(/`/g, "\\`");
-}
-
-const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
-const MAX_REPORT_DATA_ROWS = 50;
-
-function formatUnifiedReportsTable(
-  headers: UnifiedReportHeaders,
-  rows: UnifiedReportRow[],
-): { text: string; truncated: number } {
-  const cols = ["Дата", "Источник", ...headers];
-  const headerRow =
-    "| " + cols.map((c) => "*" + escapeTableCell(c) + "*").join(" | ") + " |";
-  const sep = "|" + cols.map(() => "--------").join("|") + "|";
-  const lines: string[] = [headerRow, sep];
-  const maxRows = Math.min(rows.length, MAX_REPORT_DATA_ROWS);
-  for (let i = 0; i < maxRows; i++) {
-    const r = rows[i];
-    const cells = [r.date, r.source, ...r.cells];
-    const padded = headers.length - r.cells.length;
-    for (let j = 0; j < padded; j++) cells.push("—");
-    const rowLine =
-      "| " +
-      cells.slice(0, cols.length).map(escapeTableCell).join(" | ") +
-      " |";
-    if (
-      lines.join("\n").length + rowLine.length + 100 >
-      TELEGRAM_MAX_MESSAGE_LENGTH
-    )
-      break;
-    lines.push(rowLine);
-  }
-  const truncated = rows.length - (lines.length - 2);
-  return { text: lines.join("\n"), truncated };
 }
 
 function formatReportsAsMarkdownTable(
@@ -270,89 +235,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           );
           await tgSendMessage(
             chatId,
-            `⏳ Собираю отчеты за последние ${reportsDays} дн.`,
+            `⏳ Собираю отчеты за последние ${reportsDays} дн. и создаю сводный файл…`,
           );
-          // #region agent log
-          fetch(DEBUG_INGEST, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              location: "api/telegram.ts:/reports:beforeCollect",
-              message: "calling collectReports",
-              data: { days: reportsDays },
-              timestamp: Date.now(),
-              sessionId: "debug-session",
-              hypothesisId: "H-call",
-            }),
-          }).catch(() => {});
-          // #endregion
-          appendLog({
-            location: "api/telegram.ts:beforeCollect",
-            message: "calling collectReportsData",
-            data: { days: reportsDays },
-            hypothesisId: "sync",
-          });
-          const { headers: dataHeaders, rows: dataRows } =
-            await collectReportsData(reportsDays);
-          appendLog({
-            location: "api/telegram.ts:afterCollect",
-            message: "collectReportsData returned",
-            data: { rowsLength: dataRows.length },
-            hypothesisId: "sync",
-          });
-          // #region agent log
-          fetch(DEBUG_INGEST, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              location: "api/telegram.ts:/reports:afterCollect",
-              message: "collectReportsData returned",
-              data: { rowsLength: dataRows.length },
-              timestamp: Date.now(),
-              sessionId: "debug-session",
-              hypothesisId: "H-result",
-            }),
-          }).catch(() => {});
-          // #endregion
-          if (dataRows.length === 0) {
-            appendLog({
-              location: "api/telegram.ts:reportsEmpty",
-              message: "sending not found",
-              data: { rowsLength: 0 },
-              hypothesisId: "sync",
-            });
-            // #region agent log
-            fetch(DEBUG_INGEST, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location: "api/telegram.ts:/reports:empty",
-                message: "dataRows.length === 0, sending not found",
-                data: { rowsLength: 0 },
-                timestamp: Date.now(),
-                sessionId: "debug-session",
-                hypothesisId: "H-empty",
-              }),
-            }).catch(() => {});
-            // #endregion
+          const result = await createSummaryReportDocument(reportsDays);
+          if (!result) {
             await tgSendMessage(
               chatId,
               `📭 Отчетов за последние ${reportsDays} дн. не найдено.`,
             );
             break;
           }
-
-          const { text: tableText, truncated } = formatUnifiedReportsTable(
-            dataHeaders,
-            dataRows,
+          await tgSendMessage(
+            chatId,
+            `📊 Сводный отчёт создан.\n\nСсылка на файл на Google Диске:\n${result.url}`,
           );
-          let msg =
-            `📊 *Записей за последние ${reportsDays} дн.: ${dataRows.length}*\n\n` +
-            tableText;
-          if (truncated > 0) {
-            msg += `\n\n_...показаны последние ${dataRows.length - truncated} записей_`;
-          }
-          await tgSendMessage(chatId, msg);
           break;
         }
         case "/today": {
