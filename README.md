@@ -1,38 +1,135 @@
 ## Worker Reports Telegram Bot (Vercel)
 
+Telegram бот для сбора отчетов из Google Таблиц. Деплоится на Vercel как serverless функция.
+
+### Быстрый старт
+
+```bash
+# Установка зависимостей
+yarn
+
+# Скопируйте .env.example в .env и заполните переменные
+cp .env.example .env
+
+# Локальная разработка (см. раздел ниже)
+yarn dev
+```
+
 ### Переменные окружения
 
-- **`BOT_TOKEN`**: токен Telegram бота
-- **`ADMIN_IDS`**: Telegram ID админов через запятую (пример: `123,456`)
-- **`FOLDER_ID`**: ID папки Google Drive с таблицами
-- **`GOOGLE_SERVICE_ACCOUNT_JSON`**: JSON service account целиком (в одну строку)
+**Обязательные:**
 
-Опционально (дедуп апдейтов):
+- `BOT_TOKEN` — токен Telegram бота (получить у @BotFather)
+- `ADMIN_IDS` — Telegram ID админов через запятую (пример: `123,456`)
+- `FOLDER_ID` — ID папки Google Drive с таблицами
+- `GOOGLE_SERVICE_ACCOUNT_JSON` — JSON service account целиком (в одну строку)
 
-- **`UPSTASH_REDIS_REST_URL`**
-- **`UPSTASH_REDIS_REST_TOKEN`**
+**Для локальной отладки:**
 
-Для установки вебхука из локали:
+- `WEBHOOK_BASE_URL` — URL от ngrok (пример: `https://xxxx.ngrok-free.app`)
 
-- **`WEBHOOK_BASE_URL`**: base URL вашего деплоя (пример: `https://my-bot.vercel.app`)
+**Для продакшена:**
 
-### Google доступ
+- `VERCEL_URL` — URL вашего Vercel деплоя (пример: `https://my-bot.vercel.app`)
 
-1) Создайте service account в Google Cloud.  
-2) Включите **Google Drive API**.  
-3) Скачайте ключ JSON и положите содержимое в `GOOGLE_SERVICE_ACCOUNT_JSON`.  
-4) Дайте сервисному аккаунту доступ **к папке** `FOLDER_ID` (Share → email service account).
+**Опционально (дедуп апдейтов):**
 
-### Запуск локально
+- `UPSTASH_REDIS_REST_URL`
+- `UPSTASH_REDIS_REST_TOKEN`
+
+### Локальная отладка (через ngrok)
+
+1. **Установите ngrok** (если еще не установлен):
+
+   ```bash
+   # macOS
+   brew install ngrok
+
+   # Windows (через chocolatey)
+   choco install ngrok
+
+   # Или скачайте с https://ngrok.com/download
+   ```
+
+2. **Запустите ngrok туннель:**
+
+   ```bash
+   ngrok http 3000
+   ```
+
+   Скопируйте URL вида `https://xxxx.ngrok-free.app`
+
+3. **Укажите URL в `.env`:**
+
+   ```
+   WEBHOOK_BASE_URL=https://xxxx.ngrok-free.app
+   ```
+
+4. **Установите webhook на локальный сервер:**
+
+   ```bash
+   yarn webhook:local
+   ```
+
+5. **Запустите dev сервер:**
+   ```bash
+   yarn dev
+   ```
+
+Теперь бот будет обрабатывать сообщения локально через ngrok туннель.
+
+### Переключение на продакшен
 
 ```bash
-npm i
-npm run dev
+# Установить webhook на Vercel
+yarn webhook:prod
+
+# Проверить текущий webhook
+yarn webhook:info
+
+# Удалить webhook (при необходимости)
+yarn webhook:delete
 ```
 
-### Установка вебхука
+### Скрипты
 
-```bash
-BOT_TOKEN=... WEBHOOK_BASE_URL=https://... npm run set-webhook
+| Команда               | Описание                              |
+| --------------------- | ------------------------------------- |
+| `yarn dev`            | Запуск локального dev сервера         |
+| `yarn build`          | Проверка TypeScript                   |
+| `yarn webhook:local`  | Установить webhook на ngrok URL       |
+| `yarn webhook:prod`   | Установить webhook на Vercel URL      |
+| `yarn webhook:delete` | Удалить webhook                       |
+| `yarn webhook:info`   | Показать информацию о текущем webhook |
+
+### Google Drive доступ
+
+1. Создайте service account в [Google Cloud Console](https://console.cloud.google.com/)
+2. Включите **Google Drive API**
+3. Скачайте ключ JSON и положите содержимое в `GOOGLE_SERVICE_ACCOUNT_JSON`
+4. Дайте сервисному аккаунту доступ **к папке** `FOLDER_ID` (Share → email service account)
+
+### Деплой на Vercel
+
+1. Подключите репозиторий к Vercel
+2. Добавьте переменные окружения в настройках проекта
+3. Деплой произойдет автоматически
+4. После деплоя установите webhook: `yarn webhook:prod`
+
+### Структура проекта
+
 ```
-
+├── api/
+│   └── telegram.ts      # Vercel serverless handler
+├── lib/
+│   ├── dedup.ts         # Дедупликация через Upstash Redis
+│   ├── env.ts           # Работа с env переменными
+│   ├── googleDrive.ts   # Google Drive API
+│   └── telegram.ts      # Telegram API helpers
+├── scripts/
+│   ├── devServer.mjs    # Локальный dev сервер
+│   ├── setWebhook.mjs   # Установка webhook
+│   ├── deleteWebhook.mjs# Удаление webhook
+│   └── webhookInfo.mjs  # Информация о webhook
+└── vercel.json          # Конфигурация Vercel
+```

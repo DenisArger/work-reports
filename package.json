@@ -3,17 +3,21 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vercel dev",
+    "dev": "tsx scripts/devServer.mjs",
     "build": "tsc -p tsconfig.json",
-    "set-webhook": "node scripts/setWebhook.mjs"
+    "webhook:local": "tsx scripts/setWebhook.mjs local",
+    "webhook:prod": "tsx scripts/setWebhook.mjs prod",
+    "webhook:delete": "tsx scripts/deleteWebhook.mjs",
+    "webhook:info": "tsx scripts/webhookInfo.mjs"
   },
   "dependencies": {
     "googleapis": "^156.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",
+    "dotenv": "^17.2.3",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.3",
     "vercel": "^39.4.2"
   }
 }
-
