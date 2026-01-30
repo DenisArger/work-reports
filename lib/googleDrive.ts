@@ -85,6 +85,8 @@ export async function collectReports(days: number): Promise<DriveReport[]> {
       for (const f of resp.data.files || []) {
         if (!f.id || seenIds.has(f.id)) continue;
         if (!f.webViewLink || !f.modifiedTime || !f.name) continue;
+        // Только таблицы с ответами из форм (название содержит «(Ответы)»)
+        if (!f.name.includes("(Ответы)")) continue;
         seenIds.add(f.id);
         out.push({
           name: f.name,
