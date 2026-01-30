@@ -95,14 +95,14 @@ yarn webhook:delete
 
 ### Скрипты
 
-| Команда               | Описание                              |
-| --------------------- | ------------------------------------- |
+| Команда               | Описание                               |
+| --------------------- | -------------------------------------- |
 | `yarn dev`            | Сборка и запуск локального dev сервера |
-| `yarn build`          | Сборка TypeScript (в dist/)           |
-| `yarn webhook:local`  | Установить webhook на ngrok URL       |
-| `yarn webhook:prod`   | Установить webhook на Vercel URL      |
-| `yarn webhook:delete` | Удалить webhook                       |
-| `yarn webhook:info`   | Показать информацию о текущем webhook |
+| `yarn build`          | Сборка TypeScript (в dist/)            |
+| `yarn webhook:local`  | Установить webhook на ngrok URL        |
+| `yarn webhook:prod`   | Установить webhook на Vercel URL       |
+| `yarn webhook:delete` | Удалить webhook                        |
+| `yarn webhook:info`   | Показать информацию о текущем webhook  |
 
 ### Google Drive доступ
 
@@ -120,7 +120,7 @@ yarn webhook:delete
    - `FOLDER_ID` — ID папки Google Drive
    - `GOOGLE_SERVICE_ACCOUNT_JSON` — JSON сервисного аккаунта (в одну строку)
    - при необходимости: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
-3. В настройках проекта на Vercel выберите Node.js 18 или 20 (в проекте указано `engines.node >= 18`).
+3. В настройках проекта на Vercel: **Root Directory** оставьте пустым; выберите Node.js 18 или 20. Сборка задаётся в `vercel.json` (`yarn build:vercel` — Build Output API); не переопределяйте Build Command в Dashboard, иначе маршруты `/api/*` могут не появиться.
 4. Деплой произойдёт автоматически при пуше.
 5. После деплоя установите webhook: в `.env` укажите `VERCEL_URL=https://<ваш-проект>.vercel.app` и выполните `yarn webhook:prod`. URL webhook для Telegram: `https://<ваш-vercel-домен>/api/telegram`.
 
