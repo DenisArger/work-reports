@@ -1,14 +1,19 @@
 {
   "version": 2,
-  "functions": {
-    "api/**/*.ts": {
-      "maxDuration": 30
+  "builds": [
+    {
+      "src": "api/telegram.ts",
+      "use": "@vercel/node"
     }
-  },
+  ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
+      "src": "/",
+      "dest": "/api/telegram"
+    },
+    {
+      "src": "/api/telegram",
+      "dest": "/api/telegram"
     }
   ]
 }
