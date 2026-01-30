@@ -1,8 +1,8 @@
 import { VercelRequest, VercelResponse } from "@vercel/node";
-import { collectReports } from "../lib/googleDrive.js";
-import { isUpdateProcessed, markUpdateProcessed } from "../lib/dedup.js";
-import { tgSendMessage } from "../lib/telegram.js";
-import { getEnv, mustGetEnv } from "../lib/env.js";
+import { collectReports } from "../lib/googleDrive";
+import { isUpdateProcessed, markUpdateProcessed } from "../lib/dedup";
+import { tgSendMessage } from "../lib/telegram";
+import { getEnv, mustGetEnv } from "../lib/env";
 
 type TgUpdate = {
   update_id: number;
