@@ -28,9 +28,9 @@ yarn dev
 
 - `WEBHOOK_BASE_URL` — URL от ngrok (пример: `https://xxxx.ngrok-free.app`)
 
-**Для продакшена:**
+**Для продакшена (скрипт webhook:prod):**
 
-- `VERCEL_URL` — URL вашего Vercel деплоя (пример: `https://my-bot.vercel.app`)
+- `VERCEL_URL` — полный URL вашего Vercel деплоя (пример: `https://worker-reports.vercel.app`). Нужен только при запуске `yarn webhook:prod` локально; на самом Vercel эта переменная задаётся автоматически.
 
 **Опционально (дедуп апдейтов):**
 
@@ -80,8 +80,10 @@ yarn dev
 
 ### Переключение на продакшен
 
+После каждого деплоя (или смены домена) нужно заново выставить webhook на Vercel. В `.env` должен быть указан `VERCEL_URL` (полный URL деплоя), так как скрипт выполняется локально:
+
 ```bash
-# Установить webhook на Vercel
+# Установить webhook на Vercel (в .env задайте VERCEL_URL)
 yarn webhook:prod
 
 # Проверить текущий webhook
@@ -95,8 +97,8 @@ yarn webhook:delete
 
 | Команда               | Описание                              |
 | --------------------- | ------------------------------------- |
-| `yarn dev`            | Запуск локального dev сервера         |
-| `yarn build`          | Проверка TypeScript                   |
+| `yarn dev`            | Сборка и запуск локального dev сервера |
+| `yarn build`          | Сборка TypeScript (в dist/)           |
 | `yarn webhook:local`  | Установить webhook на ngrok URL       |
 | `yarn webhook:prod`   | Установить webhook на Vercel URL      |
 | `yarn webhook:delete` | Удалить webhook                       |
@@ -111,10 +113,16 @@ yarn webhook:delete
 
 ### Деплой на Vercel
 
-1. Подключите репозиторий к Vercel
-2. Добавьте переменные окружения в настройках проекта
-3. Деплой произойдет автоматически
-4. После деплоя установите webhook: `yarn webhook:prod`
+1. Подключите репозиторий к Vercel.
+2. В настройках проекта (Settings → Environment Variables) добавьте переменные окружения:
+   - `BOT_TOKEN` — токен бота
+   - `ADMIN_IDS` — ID админов через запятую
+   - `FOLDER_ID` — ID папки Google Drive
+   - `GOOGLE_SERVICE_ACCOUNT_JSON` — JSON сервисного аккаунта (в одну строку)
+   - при необходимости: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
+3. В настройках проекта на Vercel выберите Node.js 18 или 20 (в проекте указано `engines.node >= 18`).
+4. Деплой произойдёт автоматически при пуше.
+5. После деплоя установите webhook: в `.env` укажите `VERCEL_URL=https://<ваш-проект>.vercel.app` и выполните `yarn webhook:prod`. URL webhook для Telegram: `https://<ваш-vercel-домен>/api/telegram`.
 
 ### Структура проекта
 

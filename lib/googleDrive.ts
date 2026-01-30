@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { mustGetEnv } from './env.js';
+import { mustGetEnv } from './env';
 
 export type DriveReport = {
   name: string;

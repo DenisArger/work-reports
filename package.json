@@ -1,8 +1,11 @@
 {
   "name": "worker-reports-bot",
   "private": true,
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "dev": "tsx scripts/devServer.mjs",
+    "dev": "tsc -p tsconfig.json && tsx scripts/devServer.mjs",
     "build": "tsc -p tsconfig.json",
     "webhook:local": "tsx scripts/setWebhook.mjs local",
     "webhook:prod": "tsx scripts/setWebhook.mjs prod",

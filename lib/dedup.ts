@@ -1,4 +1,4 @@
-import { getEnv } from './env.js';
+import { getEnv } from './env';
 
 // Дедуп по update_id.
 // На Vercel in-memory не гарантирован (холодные старты), поэтому лучше Upstash Redis.

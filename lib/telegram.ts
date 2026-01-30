@@ -1,4 +1,4 @@
-import { mustGetEnv } from "./env.js";
+import { mustGetEnv } from "./env";
 
 type SendMessagePayload = {
   chat_id: number | string;

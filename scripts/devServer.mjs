@@ -1,21 +1,24 @@
 import "dotenv/config";
 import http from "node:http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { pathToFileURL } from "node:url";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || "0.0.0.0";
 
-// Динамически импортируем handler из api/telegram.ts
 let handler = null;
 
 async function loadHandler() {
   if (!handler) {
-    const module = await import("../api/telegram.js");
+    const handlerPath = path.join(__dirname, "..", "dist", "api", "telegram.js");
+    const module = await import(pathToFileURL(handlerPath).href);
     handler = module.default;
   }
   return handler;
 }
 
-// Собираем тело запроса
 function collectBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -25,18 +28,70 @@ function collectBody(req) {
   });
 }
 
-// Создаем Web API-совместимый Request из Node.js http.IncomingMessage
-async function createRequest(req, body) {
+/** Создаёт объект, совместимый с VercelRequest (method, body, headers, url). */
+function createVercelReq(nodeReq, rawBody) {
   const url = new URL(
-    req.url || "/",
-    `http://${req.headers.host || "localhost"}`,
+    nodeReq.url || "/",
+    `http://${nodeReq.headers.host || "localhost"}`,
   );
+  let body = rawBody;
+  const contentType = (nodeReq.headers["content-type"] || "").toLowerCase();
+  if (rawBody && contentType.includes("application/json")) {
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      // leave as string
+    }
+  }
+  return {
+    method: nodeReq.method,
+    url: url.href,
+    headers: nodeReq.headers,
+    body,
+    query: Object.fromEntries(url.searchParams),
+  };
+}
 
-  return new Request(url.toString(), {
-    method: req.method,
-    headers: req.headers,
-    body: req.method !== "GET" && req.method !== "HEAD" ? body : undefined,
-  });
+/** Создаёт объект, совместимый с VercelResponse (status, send, setHeader, затем отправить через nodeRes). */
+function createVercelRes() {
+  const res = {
+    _status: 200,
+    _headers: {},
+    _body: null,
+  };
+  res.status = function (code) {
+    this._status = code;
+    return this;
+  };
+  res.send = function (body) {
+    this._body = body === undefined ? "OK" : body;
+    return this;
+  };
+  res.setHeader = function (name, value) {
+    this._headers[String(name).toLowerCase()] = value;
+    return this;
+  };
+  res.json = function (obj) {
+    this.setHeader("content-type", "application/json");
+    this._body = JSON.stringify(obj);
+    return this;
+  };
+  return res;
+}
+
+function sendVercelResToNode(vercelRes, nodeRes) {
+  nodeRes.statusCode = vercelRes._status;
+  for (const [name, value] of Object.entries(vercelRes._headers)) {
+    nodeRes.setHeader(name, value);
+  }
+  const body = vercelRes._body;
+  if (body === null || body === undefined) {
+    nodeRes.end();
+  } else if (Buffer.isBuffer(body)) {
+    nodeRes.end(body);
+  } else {
+    nodeRes.end(String(body));
+  }
 }
 
 const server = http.createServer(async (req, res) => {
@@ -47,7 +102,6 @@ const server = http.createServer(async (req, res) => {
 
   console.log(`[${new Date().toISOString()}] ${req.method} ${url.pathname}`);
 
-  // Health check
   if (url.pathname === "/" || url.pathname === "/health") {
     res.statusCode = 200;
     res.setHeader("content-type", "text/plain; charset=utf-8");
@@ -55,24 +109,17 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Telegram webhook endpoint
   if (url.pathname === "/api/telegram") {
     try {
-      const body = await collectBody(req);
-      const webRequest = await createRequest(req, body);
+      const rawBody = await collectBody(req);
+      const vercelReq = createVercelReq(req, rawBody);
+      const vercelRes = createVercelRes();
 
       const h = await loadHandler();
-      const response = await h(webRequest);
+      await h(vercelReq, vercelRes);
 
-      res.statusCode = response.status;
-      response.headers.forEach((value, key) => {
-        res.setHeader(key, value);
-      });
-
-      const responseBody = await response.text();
-      res.end(responseBody);
-
-      console.log(`  -> ${response.status}`);
+      sendVercelResToNode(vercelRes, res);
+      console.log(`  -> ${vercelRes._status}`);
     } catch (err) {
       console.error("Handler error:", err);
       res.statusCode = 500;
@@ -82,7 +129,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 404 для остальных путей
   res.statusCode = 404;
   res.setHeader("content-type", "text/plain");
   res.end("Not Found\n");
