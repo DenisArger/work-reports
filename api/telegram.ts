@@ -50,6 +50,15 @@ function formatDate(iso: string): string {
   }).format(d);
 }
 
+/** Экранирует символы Markdown в тексте для Telegram (parse_mode: Markdown). */
+function escapeMarkdown(text: string): string {
+  return String(text)
+    .replace(/\\/g, "\\\\")
+    .replace(/\*/g, "\\*")
+    .replace(/_/g, "\\_")
+    .replace(/`/g, "\\`");
+}
+
 const DEBUG_INGEST =
   "http://127.0.0.1:7243/ingest/9acac06f-fa87-45a6-af60-73458650b939";
 
@@ -120,7 +129,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         case "/start": {
           await tgSendMessage(
             chatId,
-            `🎉 *Привет, ${userName}!*\\n\\n` +
+            `🎉 *Привет, ${escapeMarkdown(userName)}!*\\n\\n` +
               `Я бот для сбора отчетов из Google Таблиц.\\n\\n` +
               `*Доступные команды:*\\n` +
               `📊 /reports - Отчеты за неделю\\n` +
@@ -264,9 +273,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             top
               .map(
                 (r, i) =>
-                  `${i + 1}. ${r.name}\\n   📅 ${formatDate(r.lastUpdated)}\\n   👤 ${
-                    r.author || "Автор не указан"
-                  }\\n   🔗 ${r.url}`,
+                  `${i + 1}. ${escapeMarkdown(r.name)}\\n   📅 ${escapeMarkdown(formatDate(r.lastUpdated))}\\n   👤 ${escapeMarkdown(r.author || "Автор не указан")}\\n   🔗 ${escapeMarkdown(r.url)}`,
               )
               .join("\\n\\n") +
             (reports.length > 5
@@ -297,9 +304,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             reports
               .map(
                 (r, i) =>
-                  `${i + 1}. ${r.name}\\n   📅 ${formatDate(r.lastUpdated)}\\n   👤 ${
-                    r.author || "Неизвестно"
-                  }\\n   🔗 ${r.url}`,
+                  `${i + 1}. ${escapeMarkdown(r.name)}\\n   📅 ${escapeMarkdown(formatDate(r.lastUpdated))}\\n   👤 ${escapeMarkdown(r.author || "Неизвестно")}\\n   🔗 ${escapeMarkdown(r.url)}`,
               )
               .join("\\n\\n");
 
@@ -344,10 +349,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (adminChatId) {
         const friendlyMsg = isDriveApiDisabled
           ? `❌ *Google Drive API отключен*\\n\\n` +
-            `Включите API в проекте и подождите 1–2 минуты:\\n${driveApiUrl}`
+            `Включите API в проекте и подождите 1–2 минуты:\\n${escapeMarkdown(driveApiUrl)}`
           : `❌ *Ошибка*\\n` +
             `Update: \`${String(updateId)}\`\\n` +
-            `Msg: \`${errMsg.slice(0, 300)}\``;
+            `Msg: \`${escapeMarkdown(errMsg.slice(0, 300))}\``;
         await tgSendMessage(adminChatId, friendlyMsg);
       }
     } catch {
