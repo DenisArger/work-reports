@@ -7,7 +7,7 @@ if (!botToken) {
 }
 
 console.log("Получение информации о webhook...");
-console.log("");
+console.log("в");
 
 const res = await fetch(
   `https://api.telegram.org/bot${botToken}/getWebhookInfo`,
