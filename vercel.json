@@ -2,8 +2,16 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/*.ts",
+      "src": "api/telegram.ts",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/health.ts",
       "use": "@vercel/node"
     }
+  ],
+  "rewrites": [
+    { "source": "/api/telegram", "destination": "/api/telegram" },
+    { "source": "/api/health", "destination": "/api/health" }
   ]
 }
