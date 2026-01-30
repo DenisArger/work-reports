@@ -59,6 +59,42 @@ function escapeMarkdown(text: string): string {
     .replace(/`/g, "\\`");
 }
 
+/** Экранирует содержимое ячейки для Markdown-таблицы (|, \, *, _, `). */
+function escapeTableCell(text: string): string {
+  return String(text)
+    .replace(/\r?\n/g, " ")
+    .replace(/\\/g, "\\\\")
+    .replace(/\|/g, "\\|")
+    .replace(/\*/g, "\\*")
+    .replace(/_/g, "\\_")
+    .replace(/`/g, "\\`");
+}
+
+function formatReportsAsMarkdownTable(
+  reports: {
+    name: string;
+    lastUpdated: string;
+    author?: string;
+    url: string;
+  }[],
+  maxRows: number,
+): string {
+  const header = "| *Имя* | *Дата* | *Автор* | *Ссылка* |";
+  const separator = "|------|--------|--------|----------|";
+  const rows = reports
+    .slice(0, maxRows)
+    .map(
+      (r) =>
+        `| ${escapeTableCell(r.name)} | ${escapeTableCell(formatDate(r.lastUpdated))} | ${escapeTableCell(r.author || "—")} | ${escapeTableCell(r.url)} |`,
+    );
+  const table = [header, separator, ...rows].join("\\n");
+  const tail =
+    reports.length > maxRows
+      ? `\\n\\n_...и еще ${reports.length - maxRows} отчетов_`
+      : "";
+  return table + tail;
+}
+
 const DEBUG_INGEST =
   "http://127.0.0.1:7243/ingest/9acac06f-fa87-45a6-af60-73458650b939";
 
@@ -267,18 +303,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             break;
           }
 
-          const top = reports.slice(0, 5);
           const msg =
             `📊 *Найдено отчетов: ${reports.length}*\\n\\n` +
-            top
-              .map(
-                (r, i) =>
-                  `${i + 1}. ${escapeMarkdown(r.name)}\\n   📅 ${escapeMarkdown(formatDate(r.lastUpdated))}\\n   👤 ${escapeMarkdown(r.author || "Автор не указан")}\\n   🔗 ${escapeMarkdown(r.url)}`,
-              )
-              .join("\\n\\n") +
-            (reports.length > 5
-              ? `\\n\\n...и еще ${reports.length - 5} отчетов`
-              : "");
+            formatReportsAsMarkdownTable(reports, 15);
 
           await tgSendMessage(chatId, msg);
           break;
@@ -301,12 +328,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
           const msg =
             `📅 *Отчеты за сегодня*\\nНайдено: ${reports.length} отчетов\\n\\n` +
-            reports
-              .map(
-                (r, i) =>
-                  `${i + 1}. ${escapeMarkdown(r.name)}\\n   📅 ${escapeMarkdown(formatDate(r.lastUpdated))}\\n   👤 ${escapeMarkdown(r.author || "Неизвестно")}\\n   🔗 ${escapeMarkdown(r.url)}`,
-              )
-              .join("\\n\\n");
+            formatReportsAsMarkdownTable(reports, 50);
 
           await tgSendMessage(chatId, msg);
           break;
