@@ -1,5 +1,5 @@
-import { google } from 'googleapis';
-import { mustGetEnv } from './env';
+import { google } from "googleapis";
+import { mustGetEnv } from "./env";
 
 export type DriveReport = {
   name: string;
@@ -11,55 +11,96 @@ export type DriveReport = {
 function getDriveClient() {
   // Service account JSON (целиком) кладём в env как строку.
   // В Vercel это удобно хранить в переменной окружения.
-  const credsRaw = mustGetEnv('GOOGLE_SERVICE_ACCOUNT_JSON');
+  const credsRaw = mustGetEnv("GOOGLE_SERVICE_ACCOUNT_JSON");
   const creds = JSON.parse(credsRaw);
 
   const auth = new google.auth.GoogleAuth({
     credentials: creds,
-    scopes: ['https://www.googleapis.com/auth/drive.readonly']
+    scopes: ["https://www.googleapis.com/auth/drive.readonly"],
   });
 
-  return google.drive({ version: 'v3', auth });
+  return google.drive({ version: "v3", auth });
+}
+
+/** Собирает ID папки и всех подпапок рекурсивно (поиск отчётов во вложенных папках). */
+async function listFolderIdsRecursive(
+  drive: ReturnType<typeof getDriveClient>,
+  parentId: string,
+): Promise<string[]> {
+  const ids: string[] = [parentId];
+  let pageToken: string | undefined = undefined;
+
+  do {
+    const resp: any = await drive.files.list({
+      q: `'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      pageSize: 100,
+      pageToken,
+      fields: "nextPageToken, files(id)",
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    } as any);
+
+    for (const f of resp.data.files || []) {
+      if (f.id) {
+        const childIds = await listFolderIdsRecursive(drive, f.id);
+        ids.push(...childIds);
+      }
+    }
+
+    pageToken = resp.data.nextPageToken || undefined;
+  } while (pageToken);
+
+  return ids;
 }
 
 export async function collectReports(days: number): Promise<DriveReport[]> {
-  const folderId = mustGetEnv('FOLDER_ID');
+  const folderId = mustGetEnv("FOLDER_ID");
   const drive = getDriveClient();
 
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
   const cutoffIso = cutoff.toISOString();
 
-  const q =
-    `'${folderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and modifiedTime > '${cutoffIso}' and trashed=false`;
+  const folderIds = await listFolderIdsRecursive(drive, folderId);
 
+  const seenIds = new Set<string>();
   const out: DriveReport[] = [];
-  let pageToken: string | undefined = undefined;
 
-  do {
-    const resp: any = await drive.files.list({
-      q,
-      pageSize: 100,
-      pageToken,
-      fields: 'nextPageToken, files(id,name,modifiedTime,webViewLink,owners(displayName))',
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true
-    } as any);
+  for (const fid of folderIds) {
+    const q = `'${fid}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and modifiedTime > '${cutoffIso}' and trashed=false`;
 
-    for (const f of resp.data.files || []) {
-      if (!f.webViewLink || !f.modifiedTime || !f.name) continue;
-      out.push({
-        name: f.name,
-        url: f.webViewLink,
-        lastUpdated: f.modifiedTime,
-        author: f.owners?.[0]?.displayName
-      });
-    }
+    let pageToken: string | undefined = undefined;
 
-    pageToken = resp.data.nextPageToken || undefined;
-  } while (pageToken);
+    do {
+      const resp: any = await drive.files.list({
+        q,
+        pageSize: 100,
+        pageToken,
+        fields:
+          "nextPageToken, files(id,name,modifiedTime,webViewLink,owners(displayName))",
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      } as any);
 
-  out.sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime());
+      for (const f of resp.data.files || []) {
+        if (!f.id || seenIds.has(f.id)) continue;
+        if (!f.webViewLink || !f.modifiedTime || !f.name) continue;
+        seenIds.add(f.id);
+        out.push({
+          name: f.name,
+          url: f.webViewLink,
+          lastUpdated: f.modifiedTime,
+          author: f.owners?.[0]?.displayName,
+        });
+      }
+
+      pageToken = resp.data.nextPageToken || undefined;
+    } while (pageToken);
+  }
+
+  out.sort(
+    (a, b) =>
+      new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime(),
+  );
   return out;
 }
-

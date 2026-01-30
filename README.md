@@ -21,7 +21,7 @@ yarn dev
 
 - `BOT_TOKEN` — токен Telegram бота (получить у @BotFather)
 - `ADMIN_IDS` — Telegram ID админов через запятую (пример: `123,456`)
-- `FOLDER_ID` — ID папки Google Drive с таблицами
+- `FOLDER_ID` — ID папки Google Drive с таблицами (поиск идёт по папке и всем подпапкам)
 - `GOOGLE_SERVICE_ACCOUNT_JSON` — JSON service account целиком (в одну строку)
 
 **Для локальной отладки:**
