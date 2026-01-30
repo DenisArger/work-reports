@@ -1,7 +1,6 @@
 {
   "name": "worker-reports-bot",
   "private": true,
-  "type": "module",
   "scripts": {
     "dev": "tsx scripts/devServer.mjs",
     "build": "tsc -p tsconfig.json",
