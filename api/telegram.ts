@@ -229,16 +229,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       err?.stack?.slice(0, 300),
     );
     // #endregion
-    // Пытаемся пингануть админа, если настроен
+    const errMsg = String(err?.message || err);
+    const isDriveApiDisabled =
+      /Google Drive API.*(has not been used|disabled)/i.test(errMsg);
+    const projectMatch = errMsg.match(/project[=\s](\d+)/i);
+    const driveApiUrl = projectMatch
+      ? `https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=${projectMatch[1]}`
+      : "https://console.developers.google.com/apis/api/drive.googleapis.com/overview";
+
     try {
       const adminChatId = (getEnv("ADMIN_IDS") || "").split(",")[0]?.trim();
       if (adminChatId) {
-        await tgSendMessage(
-          adminChatId,
-          `❌ *Ошибка*\\n` +
+        const friendlyMsg = isDriveApiDisabled
+          ? `❌ *Google Drive API отключен*\\n\\n` +
+            `Включите API в проекте и подождите 1–2 минуты:\\n${driveApiUrl}`
+          : `❌ *Ошибка*\\n` +
             `Update: \`${String(updateId)}\`\\n` +
-            `Msg: \`${String(err?.message || err).slice(0, 300)}\``,
-        );
+            `Msg: \`${errMsg.slice(0, 300)}\``;
+        await tgSendMessage(adminChatId, friendlyMsg);
       }
     } catch {
       // ignore

@@ -107,7 +107,9 @@ yarn webhook:delete
 ### Google Drive доступ
 
 1. Создайте service account в [Google Cloud Console](https://console.cloud.google.com/)
-2. Включите **Google Drive API**
+2. **Включите Google Drive API** в этом же проекте:  
+   [Google Drive API → включить](https://console.developers.google.com/apis/api/drive.googleapis.com/overview)  
+   (выберите нужный проект, нажмите «Включить»; после включения подождите 1–2 минуты)
 3. Скачайте ключ JSON и положите содержимое в `GOOGLE_SERVICE_ACCOUNT_JSON`
 4. Дайте сервисному аккаунту доступ **к папке** `FOLDER_ID` (Share → email service account)
 
