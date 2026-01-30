@@ -122,7 +122,7 @@ yarn webhook:delete
    - `FOLDER_ID` — ID папки Google Drive
    - `GOOGLE_SERVICE_ACCOUNT_JSON` — JSON сервисного аккаунта (в одну строку)
    - при необходимости: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
-3. В настройках проекта на Vercel: **Root Directory** оставьте пустым; выберите Node.js 18 или 20. Сборка задаётся в `vercel.json` (`yarn build:vercel` — Build Output API); не переопределяйте Build Command в Dashboard, иначе маршруты `/api/*` могут не появиться.
+3. В настройках проекта на Vercel: **Root Directory** оставьте пустым; выберите Node.js 20. **Build Command** в Dashboard оставьте пустым (сборка задаётся в `vercel.json`; если там указан `yarn build:vercel` — удалите, иначе возможна ошибка `EEXIST: file already exists, mkdir ... .func`). При повторяющихся ошибках деплоя: **Settings → General → Build Cache → Clear**.
 4. Деплой произойдёт автоматически при пуше.
 5. После деплоя установите webhook: в `.env` укажите `VERCEL_URL=https://<ваш-проект>.vercel.app` и выполните `yarn webhook:prod`. URL webhook для Telegram: `https://<ваш-vercel-домен>/api/telegram`.
 
