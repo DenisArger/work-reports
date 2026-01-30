@@ -1,3 +1,4 @@
+import { VercelRequest, VercelResponse } from "@vercel/node";
 import { collectReports } from "../lib/googleDrive.js";
 import { isUpdateProcessed, markUpdateProcessed } from "../lib/dedup.js";
 import { tgSendMessage } from "../lib/telegram.js";
@@ -31,32 +32,35 @@ function formatDate(iso: string): string {
   }).format(d);
 }
 
-export default async function handler(req: Request): Promise<Response> {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   // #region agent log
   console.log("[DEBUG] Handler entry, method:", req.method);
   // #endregion
-  if (req.method !== "POST") return new Response("OK", { status: 200 });
+
+  if (req.method !== "POST") {
+    return res.status(200).send("OK");
+  }
 
   let update: TgUpdate;
   try {
-    update = (await req.json()) as TgUpdate;
+    update = req.body as TgUpdate;
+    // #region agent log
+    console.log("[DEBUG] Update parsed:", {
+      update_id: update.update_id,
+      hasMessage: !!update.message,
+      text: update.message?.text,
+    });
+    // #endregion
   } catch (e: any) {
     // #region agent log
-    console.log("[DEBUG] JSON parse failed:", e?.message);
+    console.log("[DEBUG] Body parse failed:", e?.message);
     // #endregion
-    return new Response("OK", { status: 200 });
+    return res.status(200).send("OK");
   }
-  // #region agent log
-  console.log("[DEBUG] Update parsed:", {
-    update_id: update.update_id,
-    hasMessage: !!update.message,
-    text: update.message?.text,
-  });
-  // #endregion
 
   const updateId = update.update_id;
   if (typeof updateId === "number" && (await isUpdateProcessed(updateId))) {
-    return new Response("OK", { status: 200 });
+    return res.status(200).send("OK");
   }
 
   // Отвечаем Telegram быстро, но работу всё равно делаем синхронно (для MVP).
@@ -226,5 +230,5 @@ export default async function handler(req: Request): Promise<Response> {
     }
   }
 
-  return new Response("OK", { status: 200 });
+  return res.status(200).send("OK");
 }
