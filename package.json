@@ -2,7 +2,7 @@
   "name": "worker-reports-bot",
   "private": true,
   "engines": {
-    "node": "20.x"
+    "node": ">=20"
   },
   "scripts": {
     "dev": "tsc -p tsconfig.json && tsx scripts/devServer.mjs",

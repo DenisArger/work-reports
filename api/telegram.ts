@@ -1,8 +1,26 @@
+import fs from "node:fs";
+import path from "node:path";
 import { VercelRequest, VercelResponse } from "@vercel/node";
 import { collectReports } from "../lib/googleDrive";
 import { isUpdateProcessed, markUpdateProcessed } from "../lib/dedup";
 import { tgSendMessage } from "../lib/telegram";
 import { getEnv, mustGetEnv } from "../lib/env";
+
+const DEBUG_LOG_PATH = path.join(process.cwd(), ".cursor", "debug.log");
+function appendLog(obj: Record<string, unknown>) {
+  try {
+    fs.appendFileSync(
+      DEBUG_LOG_PATH,
+      JSON.stringify({
+        ...obj,
+        timestamp: Date.now(),
+        sessionId: "debug-session",
+      }) + "\n",
+    );
+  } catch {
+    // ignore
+  }
+}
 
 type TgUpdate = {
   update_id: number;
@@ -135,6 +153,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           break;
         }
         case "/reports": {
+          // #region agent log
+          fetch(DEBUG_INGEST, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              location: "api/telegram.ts:case:/reports",
+              message: "entered /reports branch",
+              data: { userId, isAdmin: isAdmin(userId), command },
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              hypothesisId: "H-branch",
+            }),
+          }).catch(() => {});
+          // #endregion
+          appendLog({
+            location: "api/telegram.ts:reportsFlowStart",
+            message: "reports flow started (sync before any await)",
+            data: { isAdmin: isAdmin(userId) },
+            hypothesisId: "sync",
+          });
           if (!isAdmin(userId)) {
             await tgSendMessage(
               chatId,
@@ -143,15 +181,79 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             break;
           }
 
+          const reportsDays = Math.max(
+            1,
+            Math.min(90, parseInt(getEnv("REPORTS_DAYS") || "7", 10) || 7),
+          );
           await tgSendMessage(
             chatId,
-            "⏳ Собираю отчеты за последние 7 дней...",
+            `⏳ Собираю отчеты за последние ${reportsDays} дн.`,
           );
-          const reports = await collectReports(7);
+          // #region agent log
+          fetch(DEBUG_INGEST, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              location: "api/telegram.ts:/reports:beforeCollect",
+              message: "calling collectReports",
+              data: { days: reportsDays },
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              hypothesisId: "H-call",
+            }),
+          }).catch(() => {});
+          // #endregion
+          appendLog({
+            location: "api/telegram.ts:beforeCollect",
+            message: "calling collectReports",
+            data: { days: reportsDays },
+            hypothesisId: "sync",
+          });
+          const reports = await collectReports(reportsDays);
+          appendLog({
+            location: "api/telegram.ts:afterCollect",
+            message: "collectReports returned",
+            data: { reportsLength: reports.length },
+            hypothesisId: "sync",
+          });
+          // #region agent log
+          fetch(DEBUG_INGEST, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              location: "api/telegram.ts:/reports:afterCollect",
+              message: "collectReports(7) returned",
+              data: { reportsLength: reports.length },
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              hypothesisId: "H-result",
+            }),
+          }).catch(() => {});
+          // #endregion
           if (reports.length === 0) {
+            appendLog({
+              location: "api/telegram.ts:reportsEmpty",
+              message: "sending not found",
+              data: { reportsLength: 0 },
+              hypothesisId: "sync",
+            });
+            // #region agent log
+            fetch(DEBUG_INGEST, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "api/telegram.ts:/reports:empty",
+                message: "reports.length === 0, sending not found",
+                data: { reportsLength: 0 },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                hypothesisId: "H-empty",
+              }),
+            }).catch(() => {});
+            // #endregion
             await tgSendMessage(
               chatId,
-              "📭 Отчетов за последние 7 дней не найдено.",
+              `📭 Отчетов за последние ${reportsDays} дн. не найдено.`,
             );
             break;
           }
