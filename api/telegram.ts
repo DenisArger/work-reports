@@ -252,6 +252,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           await tgSendMessage(
             chatId,
             `📊 Сводный отчёт создан.\n\nСсылка на файл на Google Диске:\n${result.url}`,
+            { parseMode: false },
           );
           break;
         }

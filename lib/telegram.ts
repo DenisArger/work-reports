@@ -7,16 +7,22 @@ type SendMessagePayload = {
   disable_web_page_preview?: boolean;
 };
 
-export async function tgSendMessage(chatId: number | string, text: string) {
+export async function tgSendMessage(
+  chatId: number | string,
+  text: string,
+  options?: { parseMode?: false },
+) {
   const token = mustGetEnv("BOT_TOKEN");
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
   const payload: SendMessagePayload = {
     chat_id: chatId,
     text,
-    parse_mode: "Markdown",
     disable_web_page_preview: true,
   };
+  if (options?.parseMode !== false) {
+    payload.parse_mode = "Markdown";
+  }
 
   // #region agent log
   console.log("[DEBUG] Sending to Telegram:", {
