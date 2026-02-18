@@ -1,5 +1,8 @@
 ## Worker Reports Telegram Bot (Vercel)
 
+[![CI](https://github.com/DenisArger/work-reports/actions/workflows/ci.yml/badge.svg)](https://github.com/DenisArger/work-reports/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+
 Telegram бот для сбора отчетов из Google Таблиц. Деплоится на Vercel как serverless функция.
 
 ### Быстрый старт
