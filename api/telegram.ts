@@ -1,11 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import { Buffer } from "node:buffer";
 import { VercelRequest, VercelResponse } from "@vercel/node";
 import { callAppsScriptForReport } from "../lib/appsScript";
-import {
-  collectReports,
-  createSummaryReportDocument,
-} from "../lib/googleDrive";
+import { collectReports } from "../lib/googleDrive";
 import { isUpdateProcessed, markUpdateProcessed } from "../lib/dedup";
 import { tgSendMessage } from "../lib/telegram";
 import { getEnv, mustGetEnv } from "../lib/env";
@@ -124,22 +122,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).send("OK");
   }
 
-  let update: TgUpdate;
+  let update: TgUpdate | null = null;
   try {
-    update = req.body as TgUpdate;
-    // #region agent log
-    console.log("[DEBUG] Update parsed:", {
-      update_id: update.update_id,
-      hasMessage: !!update.message,
-      text: update.message?.text,
-    });
-    // #endregion
+    const body = req.body as unknown;
+    if (body && typeof body === "object") {
+      update = body as TgUpdate;
+    } else if (typeof body === "string") {
+      update = JSON.parse(body) as TgUpdate;
+    } else if (Buffer.isBuffer(body)) {
+      update = JSON.parse(body.toString("utf-8")) as TgUpdate;
+    }
   } catch (e: any) {
-    // #region agent log
     console.log("[DEBUG] Body parse failed:", e?.message);
-    // #endregion
+  }
+
+  if (!update || typeof update !== "object") {
+    console.log("[DEBUG] Empty or unsupported request body type");
     return res.status(200).send("OK");
   }
+
+  // #region agent log
+  console.log("[DEBUG] Update parsed:", {
+    update_id: update.update_id,
+    hasMessage: !!update.message,
+    text: update.message?.text,
+  });
+  // #endregion
 
   const updateId = update.update_id;
   if (typeof updateId === "number" && (await isUpdateProcessed(updateId))) {
@@ -232,22 +240,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             break;
           }
 
-          const reportsDays = Math.max(
-            1,
-            Math.min(90, parseInt(getEnv("REPORTS_DAYS") || "7", 10) || 7),
-          );
+          const appsScriptUrl = getEnv("GOOGLE_APPS_SCRIPT_WEB_APP_URL")?.trim();
+          if (!appsScriptUrl) {
+            await tgSendMessage(
+              chatId,
+              "❌ Не настроен Apps Script для /reports. Добавьте `GOOGLE_APPS_SCRIPT_WEB_APP_URL` в переменные окружения.",
+            );
+            break;
+          }
           await tgSendMessage(
             chatId,
-            `⏳ Собираю отчеты за последние ${reportsDays} дн. и создаю сводный файл…`,
+            "⏳ Формирую сводный отчет и создаю файл…",
           );
-          const appsScriptUrl = getEnv("GOOGLE_APPS_SCRIPT_WEB_APP_URL");
-          const result = appsScriptUrl?.trim()
-            ? await callAppsScriptForReport()
-            : await createSummaryReportDocument(reportsDays);
+          const result = await callAppsScriptForReport();
           if (!result) {
             await tgSendMessage(
               chatId,
-              `📭 Отчетов за последние ${reportsDays} дн. не найдено.`,
+              "📭 Нет данных для формирования отчета.",
             );
             break;
           }
