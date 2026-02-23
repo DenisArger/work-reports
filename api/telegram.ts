@@ -103,6 +103,7 @@ const DEBUG_INGEST =
   "http://127.0.0.1:7243/ingest/9acac06f-fa87-45a6-af60-73458650b939";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  let requesterChatId: number | null = null;
   // #region agent log
   fetch(DEBUG_INGEST, {
     method: "POST",
@@ -150,6 +151,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (update.message) {
       const chatId = update.message.chat.id;
+      requesterChatId = chatId;
       const text = (update.message.text || "").trim();
       const userId = update.message.from.id;
       const userName = update.message.from.first_name || "Пользователь";
@@ -317,6 +319,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const driveApiUrl = projectMatch
       ? `https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=${projectMatch[1]}`
       : "https://console.developers.google.com/apis/api/drive.googleapis.com/overview";
+
+    try {
+      if (requesterChatId) {
+        await tgSendMessage(
+          requesterChatId,
+          "❌ Не удалось выполнить команду. Проверьте настройки и повторите попытку.",
+          { parseMode: false },
+        );
+      }
+    } catch {
+      // ignore
+    }
 
     try {
       const adminChatId = (getEnv("ADMIN_IDS") || "").split(",")[0]?.trim();
