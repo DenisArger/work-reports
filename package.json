@@ -11,7 +11,9 @@
     "webhook:local": "tsx scripts/setWebhook.mjs local",
     "webhook:prod": "tsx scripts/setWebhook.mjs prod",
     "webhook:delete": "tsx scripts/deleteWebhook.mjs",
-    "webhook:info": "tsx scripts/webhookInfo.mjs"
+    "webhook:info": "tsx scripts/webhookInfo.mjs",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "node -e \"console.log('test: no automated tests yet')\""
   },
   "dependencies": {
     "googleapis": "^156.0.0"
