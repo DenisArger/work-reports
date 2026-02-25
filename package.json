@@ -13,7 +13,7 @@
     "webhook:delete": "tsx scripts/deleteWebhook.mjs",
     "webhook:info": "tsx scripts/webhookInfo.mjs",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test"
+    "test": "node --test test/**/*.test.*"
   },
   "dependencies": {
     "googleapis": "^156.0.0"
