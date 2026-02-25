@@ -1,170 +1,113 @@
-## Worker Reports Telegram Bot (Vercel)
+# Worker Reports Telegram Bot
 
-[![CI](https://github.com/DenisArger/work-reports/actions/workflows/ci.yml/badge.svg)](https://github.com/DenisArger/work-reports/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+## English
 
-Telegram бот для сбора отчетов из Google Таблиц. Деплоится на Vercel как serverless функция.
+## Problem
+Managers need periodic report aggregation from Google Sheets, but collecting files and summaries manually is slow and error-prone.
 
-### Быстрый старт
+## Solution
+This Telegram bot receives commands, collects report spreadsheets from Google Drive, and returns structured summaries (including document generation flows).
 
+## Tech Stack
+- Node.js 20+
+- TypeScript
+- Telegram Bot API (Vercel function handlers)
+- Google APIs (`googleapis`)
+- Vercel
+
+## Architecture
+Top-level structure:
+```text
+api/
+  telegram.ts
+  health.ts
+lib/
+scripts/
+vercel.json
+package.json
+```
+
+```mermaid
+flowchart TD
+  A[Telegram Webhook] --> B[api/telegram.ts]
+  B --> C[Command Router]
+  C --> D[lib/googleDrive]
+  D --> E[Google Drive/Sheets/Docs]
+  C --> F[lib/telegram send]
+  F --> A
+```
+
+## Features
+- Telegram commands for report operations (`/reports`, `/today`, etc.)
+- Aggregation from Google Drive spreadsheets
+- Summary document generation flows
+- Admin-only command restrictions and update dedup support
+
+## How to Run
 ```bash
-# Установка зависимостей
-yarn
-
-# Скопируйте .env.example в .env и заполните переменные
+yarn install
 cp .env.example .env
-
-# Локальная разработка (см. раздел ниже)
 yarn dev
 ```
 
-### Переменные окружения
-
-**Минимум для работы `/reports` (через Apps Script):**
-
-- `BOT_TOKEN` — токен Telegram бота (получить у @BotFather)
-- `ADMIN_IDS` — Telegram ID админов через запятую (пример: `123,456`)
-- `GOOGLE_APPS_SCRIPT_WEB_APP_URL` — URL развёрнутого Web App из `code.gs`
-- `GOOGLE_APPS_SCRIPT_SECRET` — секретный токен для доступа к Web App (тот же, что в Script Properties `APPS_SCRIPT_SECRET`)
-
-**Опционально (нужно только для команды `/today`):**
-
-- `FOLDER_ID` — ID папки Google Drive с таблицами «(Ответы)»
-- `GOOGLE_SERVICE_ACCOUNT_JSON` — JSON service account целиком (в одну строку)
-- `REPORT_NAME_SUBSTRING` — подстрока в названии файла для отбора отчётов (по умолчанию `(Ответы)`). Если ваши таблицы называются иначе, задайте эту переменную.
-
-**Для локальных скриптов webhook (не обязательно для работы бота на Vercel):**
-
-- `WEBHOOK_BASE_URL` — URL от ngrok (пример: `https://xxxx.ngrok-free.app`)
-- `VERCEL_URL` — полный URL вашего Vercel деплоя (пример: `https://worker-reports.vercel.app`). Нужен только при запуске `yarn webhook:prod` локально; на самом Vercel обычно задаётся автоматически.
-
-**Опционально (дедуп апдейтов):**
-
-- `UPSTASH_REDIS_REST_URL`
-- `UPSTASH_REDIS_REST_TOKEN`
-
-### Локальная отладка (через ngrok)
-
-1. **Установите ngrok** (если еще не установлен):
-
-   ```bash
-   # macOS
-   brew install ngrok
-
-   # Windows (через chocolatey)
-   choco install ngrok
-
-   # Или скачайте с https://ngrok.com/download
-   ```
-
-2. **Запустите ngrok туннель:**
-
-   ```bash
-   ngrok http 3000
-   ```
-
-   Скопируйте URL вида `https://xxxx.ngrok-free.app`
-
-3. **Укажите URL в `.env`:**
-
-   ```
-   WEBHOOK_BASE_URL=https://xxxx.ngrok-free.app
-   ```
-
-4. **Установите webhook на локальный сервер:**
-
-   ```bash
-   yarn webhook:local
-   ```
-
-5. **Запустите dev сервер:**
-   ```bash
-   yarn dev
-   ```
-
-Теперь бот будет обрабатывать сообщения локально через ngrok туннель.
-
-### Переключение на продакшен
-
-После каждого деплоя (или смены домена) нужно заново выставить webhook на Vercel. В `.env` должен быть указан `VERCEL_URL` (полный URL деплоя), так как скрипт выполняется локально:
-
+Deploy/build helpers:
 ```bash
-# Установить webhook на Vercel (в .env задайте VERCEL_URL)
-yarn webhook:prod
-
-# Проверить текущий webhook
-yarn webhook:info
-
-# Удалить webhook (при необходимости)
-yarn webhook:delete
+yarn build
+yarn build:vercel
 ```
 
-### Скрипты
+## Русский
 
-| Команда               | Описание                               |
-| --------------------- | -------------------------------------- |
-| `yarn dev`            | Сборка и запуск локального dev сервера |
-| `yarn build`          | Сборка TypeScript (в dist/)            |
-| `yarn webhook:local`  | Установить webhook на ngrok URL        |
-| `yarn webhook:prod`   | Установить webhook на Vercel URL       |
-| `yarn webhook:delete` | Удалить webhook                        |
-| `yarn webhook:info`   | Показать информацию о текущем webhook  |
+## Проблема
+Руководителям нужна регулярная сводка отчетов из Google Sheets, а ручной сбор файлов и подготовка итогов занимает много времени и дает ошибки.
 
-### Google Drive и Sheets доступ
+## Решение
+Бот принимает команды в Telegram, собирает таблицы отчетов из Google Drive и возвращает структурированные сводки (включая генерацию документов).
 
-Этот раздел нужен только для команды `/today`. Для `/reports` через Apps Script можно пропустить.
+## Стек
+- Node.js 20+
+- TypeScript
+- Telegram Bot API (handlers как Vercel функции)
+- Google APIs (`googleapis`)
+- Vercel
 
-1. Создайте service account в [Google Cloud Console](https://console.cloud.google.com/)
-2. Включите в этом же проекте:
-   - **Google Drive API**: [включить](https://console.developers.google.com/apis/api/drive.googleapis.com/overview) — список таблиц «(Ответы)» в папке для `/today`
-   - **Google Sheets API**: [включить](https://console.developers.google.com/apis/api/sheets.googleapis.com/overview) — чтение содержимого листов
-   - **Google Docs API**: включать не нужно, если `/reports` идёт через Apps Script
-3. Скачайте ключ JSON и положите содержимое в `GOOGLE_SERVICE_ACCOUNT_JSON`
-4. Дайте сервисному аккаунту доступ **к папке** `FOLDER_ID` (минимум чтение, лучше редактор). Email сервисного аккаунта — поле `client_email` в JSON ключа.
-
-### Команда /reports через Google Apps Script (вариант A)
-
-Чтобы документ создавался в вашем Google Диске (без ошибки квоты сервисного аккаунта):
-
-1. Откройте [Google Apps Script](https://script.google.com/), создайте проект и вставьте код из `code.gs`.
-2. В проекте: **Проект** → **Настройки проекта** → **Свойства скрипта** добавьте:
-   - `FOLDER_ID` — ID папки с отчётами (тот же, что в `.env`)
-   - `APPS_SCRIPT_SECRET` — любой длинный секретный токен (тот же укажите в `.env` как `GOOGLE_APPS_SCRIPT_SECRET`)
-3. **Развернуть** → **Новая развёртывание** → тип **Веб-приложение**. Укажите: «У кого есть доступ» — **Только я**, «Выполнять от имени» — **Я**. Нажмите **Развернуть**, скопируйте **URL веб-приложения**.
-4. В `.env` добавьте:
-   - `GOOGLE_APPS_SCRIPT_WEB_APP_URL=https://script.google.com/macros/s/.../exec`
-   - `GOOGLE_APPS_SCRIPT_SECRET=ваш_секрет`
-5. При команде `/reports` бот вызовет этот URL (POST с токеном), скрипт создаст документ в вашем Диске и вернёт ссылку.
-
-### Деплой на Vercel
-
-1. Подключите репозиторий к Vercel.
-2. В настройках проекта (Settings → Environment Variables) добавьте переменные окружения:
-   - `BOT_TOKEN` — токен бота
-   - `ADMIN_IDS` — ID админов через запятую
-   - `GOOGLE_APPS_SCRIPT_WEB_APP_URL` — URL Web App из `code.gs`
-   - `GOOGLE_APPS_SCRIPT_SECRET` — секрет для вызова Web App
-   - если используете `/today`: `FOLDER_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON`
-   - если используете `/today`: опционально `REPORT_NAME_SUBSTRING`
-   - опционально (дедуп): `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
-3. В настройках проекта на Vercel: **Root Directory** оставьте пустым; выберите Node.js 20. **Build Command** в Dashboard оставьте пустым (сборка задаётся в `vercel.json`; если там указан `yarn build:vercel` — удалите, иначе возможна ошибка `EEXIST: file already exists, mkdir ... .func`). При повторяющихся ошибках деплоя: **Settings → General → Build Cache → Clear**.
-4. Деплой произойдёт автоматически при пуше.
-5. После деплоя установите webhook: в `.env` укажите `VERCEL_URL=https://<ваш-проект>.vercel.app` и выполните `yarn webhook:prod`. URL webhook для Telegram: `https://<ваш-vercel-домен>/api/telegram`.
-
-### Структура проекта
-
+## Архитектура
+Верхнеуровневая структура:
+```text
+api/
+  telegram.ts
+  health.ts
+lib/
+scripts/
+vercel.json
+package.json
 ```
-├── api/
-│   └── telegram.ts      # Vercel serverless handler
-├── lib/
-│   ├── dedup.ts         # Дедупликация через Upstash Redis
-│   ├── env.ts           # Работа с env переменными
-│   ├── googleDrive.ts   # Google Drive API
-│   └── telegram.ts      # Telegram API helpers
-├── scripts/
-│   ├── devServer.mjs    # Локальный dev сервер
-│   ├── setWebhook.mjs   # Установка webhook
-│   ├── deleteWebhook.mjs# Удаление webhook
-│   └── webhookInfo.mjs  # Информация о webhook
-└── vercel.json          # Конфигурация Vercel
+
+```mermaid
+flowchart TD
+  A[Telegram Webhook] --> B[api/telegram.ts]
+  B --> C[Маршрутизация команд]
+  C --> D[lib/googleDrive]
+  D --> E[Google Drive/Sheets/Docs]
+  C --> F[lib/telegram отправка]
+  F --> A
+```
+
+## Возможности
+- Telegram-команды для отчетов (`/reports`, `/today` и др.)
+- Агрегация данных из Google Drive таблиц
+- Формирование сводного документа
+- Ограничение админ-доступа и дедупликация апдейтов
+
+## Как запустить
+```bash
+yarn install
+cp .env.example .env
+yarn dev
+```
+
+Полезные команды сборки/деплоя:
+```bash
+yarn build
+yarn build:vercel
 ```
