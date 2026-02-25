@@ -1,4 +1,5 @@
 # Worker Reports Telegram Bot
+[![CI](https://github.com/DenisArger/work-reports/actions/workflows/ci.yml/badge.svg)](https://github.com/DenisArger/work-reports/actions/workflows/ci.yml)
 
 ## English
 
